@@ -1,0 +1,61 @@
+{
+  "name": "stoshi-smc",
+  "version": "1.0.0",
+  "description": "Smart contract for Stoshi",
+  "main": "index.js",
+  "scripts": {
+    "test": "hardhat test",
+    "postinstall": "husky install",
+    "compile": "rimraf types & hardhat compile --force",
+    "deployBigA": "hardhat run --network default scripts/deployBigaA.ts",
+    "deployToken": "hardhat run --network default scripts/deployToken.ts",
+    "prettier": "prettier --write \"contracts/**/*.sol\" \"scripts/**/*.ts\" \"test/**/*.ts\""
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "keywords": [
+    "stoshi"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": ""
+  },
+  "homepage": "",
+  "dependencies": {
+    "@ethersproject/abi": "^5.4.7",
+    "@ethersproject/providers": "^5.4.7",
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",
+    "@nomicfoundation/hardhat-ethers": "^3.0.4",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-verify": "^1.1.0",
+    "@openzeppelin/contracts": "4.8.2",
+    "@openzeppelin/contracts-upgradeable": "^4.8.3",
+    "@openzeppelin/hardhat-upgrades": "^2.2.1",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": ">=9.1.0",
+    "@types/node": ">=12.0.0",
+    "bignumber.js": "^9.1.1",
+    "chai": "^4.2.0",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^16.0.3",
+    "ethers": "^6.7.1",
+    "hardhat": "^2.17.2",
+    "solidity-coverage": "^0.8.0",
+    "ts-node": ">=8.0.0",
+    "typechain": "^8.3.1",
+    "typescript": ">=4.5.0"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "17.4.4",
+    "@commitlint/config-conventional": "17.4.4",
+    "husky": "8.0.3",
+    "lint-staged": "13.2.0",
+    "prettier": "2.8.4",
+    "prettier-plugin-solidity": "1.1.3"
+  }
+}

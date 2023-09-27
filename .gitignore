@@ -1,0 +1,28 @@
+# directories
+.yarn/*
+!.yarn/patches
+!.yarn/releases
+!.yarn/plugins
+!.yarn/sdks
+!.yarn/versions
+**/artifacts
+**/build
+**/cache
+**/coverage
+**/.coverage_artifacts
+**/.coverage_cache
+**/.coverage_contracts
+**/dist
+**/node_modules
+**/types
+
+# files
+*.env
+*.log
+.pnp.*
+coverage.json
+package-lock.json
+yarn.lock
+config.json
+token.json
+/.openzeppelin
