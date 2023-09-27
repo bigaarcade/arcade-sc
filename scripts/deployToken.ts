@@ -1,7 +1,7 @@
 import { ethers } from 'hardhat';
 import path from 'path';
 import { MockToken__factory } from '../types';
-import { TokenConfigs } from './configs';
+import TokenConfigs from './configs/token.json';
 const configPath = path.resolve(__dirname, 'configs/config.json');
 
 async function main() {

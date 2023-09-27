@@ -2,7 +2,7 @@ import fs from 'fs';
 import { ethers, upgrades } from 'hardhat';
 import path from 'path';
 import { BIGA__factory } from '../types';
-import { BigAConfigs } from './configs';
+import BigAConfigs from './configs/config.json';
 const configPath = path.resolve(__dirname, 'configs/config.json');
 
 async function main() {
