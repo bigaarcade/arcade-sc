@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.21;
 
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -17,8 +17,9 @@ import "./utils/VerifySignature.sol";
     GB04: Invalid signature
     GB05: Signature already used
     GB06: Invalid signature length
+    GB07: Token not whitelisted
 */
-contract BIGA is IBIGA, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using Address for address;
     using SafeCheck for address;
     using VerifySignature for bytes;
@@ -26,15 +27,18 @@ contract BIGA is IBIGA, OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
     uint public constant VERSION = 3;
 
+    uint256 public chainId;
     address public validator;
     mapping(bytes32 => bool) hashUsed;
+    mapping(address => bool) public tokenWhitelist;
 
     // Constructor
-    function initialize(address _validator) public initializer {
-        __Ownable_init();
+    function initialize(address _validator, uint256 _chainId) public initializer {
+        __Ownable2Step_init();
 
         _validator.checkEmptyAddress("GB01");
 
+        chainId = _chainId;
         validator = _validator;
     }
 
@@ -51,6 +55,32 @@ contract BIGA is IBIGA, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         emit ValidatorUpdated(_validator);
     }
 
+    /**
+     * @dev Adds a token to the whitelist.
+     * @param _tokens The list address of the ERC20 token to add to the whitelist.
+     */
+    function addToWhitelist(address[] calldata _tokens) external onlyOwner {
+        for (uint i = 0; i < _tokens.length; i++) {
+            _tokens[i].checkERC20("GB02");
+            tokenWhitelist[_tokens[i]] = true;
+        }
+
+        emit TokenAddedToWhitelist(_tokens);
+    }
+
+    /**
+     * @dev Removes a token from the whitelist.
+     * @param _tokens The list address of the ERC20 token to remove from the whitelist.
+     */
+    function removeFromWhitelist(address[] calldata _tokens) external onlyOwner {
+        for (uint i = 0; i < _tokens.length; i++) {
+            _tokens[i].checkERC20("GB02");
+            tokenWhitelist[_tokens[i]] = false;
+        }
+
+        emit TokenRemovedFromWhitelist(_tokens);
+    }
+
     // User functions
     /**
      * @dev Deposits token for the calling user.
@@ -59,6 +89,7 @@ contract BIGA is IBIGA, OwnableUpgradeable, ReentrancyGuardUpgradeable {
      * @param _tokenOut The address of the game arcade token to receive.
      */
     function deposit(address _tokenIn, address _tokenOut, uint _amountIn) external nonReentrant {
+        require(tokenWhitelist[_tokenIn], "GB07");
         address user = msg.sender;
 
         _tokenIn.checkERC20("GB02");
@@ -111,7 +142,7 @@ contract BIGA is IBIGA, OwnableUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _amountOut,
         uint256 _nonce
     ) private {
-        bytes memory data = abi.encodePacked(_user, _tokenIn, _tokenOut, _amountOut, _nonce);
+        bytes memory data = abi.encodePacked(chainId, _user, _tokenIn, _tokenOut, _amountOut, _nonce);
         data.verifySignature(_signature, validator, "GB04");
 
         bytes32 dataHash = keccak256(data);

@@ -19,4 +19,6 @@ interface IBIGA {
     event ValidatorUpdated(address _validator);
     event Deposited(address _user, address _tokenIn, address tokenOut, uint256 _amountIn);
     event Withdrawn(address _user, address _tokenIn, address tokenOut, uint256 _amountOut, uint256 _nonce);
+    event TokenRemovedFromWhitelist(address[] _tokens);
+    event TokenAddedToWhitelist(address[] _tokens);
 }
