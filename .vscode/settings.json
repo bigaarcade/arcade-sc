@@ -15,5 +15,6 @@
   "solidity.formatter": "prettier",
   "typescript.updateImportsOnFileMove.enabled": "always",
   "typescript.inlayHints.variableTypes.enabled": "all",
-  "cSpell.words": ["keccak", "mload", "sepolia"]
+  "cSpell.words": ["keccak", "mload", "sepolia"],
+  "solidity.compileUsingRemoteVersion": "v0.8.21+commit.d9974bed"
 }

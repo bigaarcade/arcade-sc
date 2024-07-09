@@ -4,12 +4,16 @@
   "description": "Smart contract for Stoshi",
   "main": "index.js",
   "scripts": {
-    "test": "hardhat test",
-    "postinstall": "husky install",
-    "compile": "rimraf types & hardhat compile --force",
-    "deployBigA": "hardhat run --network default scripts/deployBigaA.ts",
-    "deployToken": "hardhat run --network default scripts/deployToken.ts",
-    "prettier": "prettier --write \"contracts/**/*.sol\" \"scripts/**/*.ts\" \"test/**/*.ts\""
+    "test": "yarn typechain-mock & hardhat test",
+    "compile": "hardhat compile --force",
+    "coverage": "hardhat coverage",
+    "typechain": "rimraf typechain & ts-node scripts/typechain.ts",
+    "typechain-mock": "rimraf typechain & ts-node scripts/typechain.ts mock",
+    "start-node": "hardhat node",
+    "deploy": "yarn typechain & hardhat run --network default scripts/deployBiga.ts",
+    "deployToken": "yarn typechain-mock & hardhat run --network default scripts/deployToken.ts",
+    "prettier": "prettier --write \"contracts/**/*.sol\" \"scripts/**/*.ts\" \"test/**/*.ts\"",
+    "postinstall": "husky install"
   },
   "repository": {
     "type": "git",
@@ -53,6 +57,7 @@
   "devDependencies": {
     "@commitlint/cli": "17.4.4",
     "@commitlint/config-conventional": "17.4.4",
+    "hardhat-contract-sizer": "^2.10.0",
     "husky": "8.0.3",
     "lint-staged": "13.2.0",
     "prettier": "2.8.4",

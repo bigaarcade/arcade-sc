@@ -14,10 +14,12 @@ import "./utils/VerifySignature.sol";
     GB02: Not an ERC20 token address
     GB03: Invalid input
     GB03.1: Expired time must be greater than current time
+    GB03.2: Withdrawal limit must be <= 10000 (100,00%)
     GB04: Invalid signature
     GB05: Signature already used
     GB06: Invalid signature length
     GB07: Token not whitelisted
+    GB08: Withdrawal limit exceedded
 */
 contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using Address for address;
@@ -25,24 +27,39 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using VerifySignature for bytes;
     using SafeERC20 for IERC20;
 
-    uint public constant VERSION = 3;
+    uint256 public constant VERSION = 5;
 
     uint256 public chainId;
     address public validator;
     mapping(bytes32 => bool) hashUsed;
     mapping(address => bool) public tokenWhitelist;
 
-    // Constructor
-    function initialize(address _validator, uint256 _chainId) public initializer {
-        __Ownable2Step_init();
+    // Withdrawal rate limit data
+    uint256 public withdrawalLimit; // in % with 2 decimals
+    uint256 public windowDuration; // in seconds
 
+    mapping(address => uint256) public withdrawnTotal; // token address => amount
+    uint256 public windowStartTime; // timestamp
+
+    // Constructor
+    function initialize(
+        address _validator,
+        uint256 _chainId,
+        uint256 _withdrawalLimit,
+        uint256 _windowDuration
+    ) public initializer {
+        __Ownable2Step_init();
         _validator.checkEmptyAddress("GB01");
+        require(_withdrawalLimit <= 10_000, "GB03.2");
 
         chainId = _chainId;
         validator = _validator;
+        withdrawalLimit = _withdrawalLimit;
+        windowDuration = _windowDuration;
     }
 
     // Owner functions
+
     /**
      * @dev Sets the validator address.
      * @param _validator The address of the validator.
@@ -56,12 +73,39 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     /**
+     * @dev Sets the withdrawal limit.
+     * @param _withdrawalLimit Withdrawal limit amount.
+     */
+    function setWithdrawalLimit(uint256 _withdrawalLimit) external onlyOwner {
+        // Set withdraw limit = 0 => Disable withdraw entirely.
+        // Set withdraw limit = 10000 (100%) => Allow withdraw all of available.
+        require(_withdrawalLimit <= 10_000, "GB03.2");
+
+        withdrawalLimit = _withdrawalLimit;
+
+        emit WithdrawalLimitUpdated(_withdrawalLimit);
+    }
+
+    /**
+     * @dev Sets the window duration.
+     * @param _windowDuration Window duration in seconds.
+     */
+    function setWindowDuration(uint256 _windowDuration) external onlyOwner {
+        // Set window duration = 0 => Ignore the window time check, and only check total amount only.
+        windowDuration = _windowDuration;
+
+        emit WindowDurationUpdated(_windowDuration);
+    }
+
+    /**
      * @dev Adds a token to the whitelist.
      * @param _tokens The list address of the ERC20 token to add to the whitelist.
      */
     function addToWhitelist(address[] calldata _tokens) external onlyOwner {
         for (uint i = 0; i < _tokens.length; i++) {
-            _tokens[i].checkERC20("GB02");
+            if (_tokens[i] != address(0)) {
+                _tokens[i].checkERC20("GB02");
+            }
             tokenWhitelist[_tokens[i]] = true;
         }
 
@@ -74,7 +118,9 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
      */
     function removeFromWhitelist(address[] calldata _tokens) external onlyOwner {
         for (uint i = 0; i < _tokens.length; i++) {
-            _tokens[i].checkERC20("GB02");
+            if (_tokens[i] != address(0)) {
+                _tokens[i].checkERC20("GB02");
+            }
             tokenWhitelist[_tokens[i]] = false;
         }
 
@@ -82,21 +128,30 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     }
 
     // User functions
+
     /**
      * @dev Deposits token for the calling user.
      * @param _tokenIn The address of the token used for deposit.
      * @param _amountIn The amount of token to deposit.
      * @param _tokenOut The address of the game arcade token to receive.
+     * For networks other than ETH, address 0 represents arcade game tokens.
      */
-    function deposit(address _tokenIn, address _tokenOut, uint _amountIn) external nonReentrant {
+    function deposit(address _tokenIn, address _tokenOut, uint _amountIn) external payable nonReentrant {
         require(tokenWhitelist[_tokenIn], "GB07");
         address user = msg.sender;
 
-        _tokenIn.checkERC20("GB02");
-        _tokenOut.checkERC20("GB02");
         require(_amountIn > 0, "GB03");
+        if (_tokenOut != address(0)) {
+            _tokenOut.checkERC20("GB02");
+        }
 
-        IERC20(_tokenIn).safeTransferFrom(user, address(this), _amountIn);
+        // Check + Deposit token from user
+        if (_tokenIn == address(0)) {
+            require(msg.value == _amountIn, "GB03");
+        } else {
+            _tokenIn.checkERC20("GB02");
+            IERC20(_tokenIn).safeTransferFrom(user, address(this), _amountIn);
+        }
 
         emit Deposited(user, _tokenIn, _tokenOut, _amountIn);
     }
@@ -104,6 +159,7 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     /**
      * @dev Withdraws token for the calling user.
      * @param _tokenIn The address of the game arcade token used for withdraw.
+     * For networks other than ETH, address 0 represents arcade game tokens.
      * @param _tokenOut The address of the token receive.
      * @param _amountOut The amount of token to receive.
      * @param _nonce The unique nonce for each withdraw request.
@@ -116,23 +172,56 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _nonce,
         bytes calldata _signature
     ) external nonReentrant {
+        require(tokenWhitelist[_tokenOut], "GB07");
         address user = msg.sender;
 
-        _tokenIn.checkERC20("GB02");
-        _tokenOut.checkERC20("GB02");
         require(_amountOut > 0, "GB03");
+        if (_tokenIn != address(0)) {
+            _tokenIn.checkERC20("GB02");
+        }
 
         _validateWithdrawData(_signature, user, _tokenIn, _tokenOut, _amountOut, _nonce);
 
-        IERC20(_tokenOut).safeTransfer(user, _amountOut);
+        // Validate withdraw limit + Update total withdrawal
+        // Reset window start time if exceed window
+        if (checkWindow()) {
+            require(withdrawnTotal[_tokenOut] + _amountOut <= _withdrawalLimitAmount(_tokenOut), "GB08");
+            withdrawnTotal[_tokenOut] += _amountOut;
+        } else {
+            require(_amountOut <= _withdrawalLimitAmount(_tokenOut), "GB08");
+            withdrawnTotal[_tokenOut] = _amountOut;
+            windowStartTime = block.timestamp;
+        }
 
-        emit Withdrawn(user, _tokenIn, _tokenOut, _amountOut, _nonce);
+        // Withdraw token to user
+        if (_tokenOut == address(0)) {
+            payable(user).transfer(_amountOut);
+        } else {
+            _tokenOut.checkERC20("GB02");
+            IERC20(_tokenOut).safeTransfer(user, _amountOut);
+        }
+
+        emit Withdrawn(user, _tokenIn, _tokenOut, _amountOut, _nonce, chainId);
+    }
+
+    /**
+     * @dev Check if the current window is still active. True = Current time <= Window start time + Window duration
+     */
+    function checkWindow() public view returns (bool) {
+        return block.timestamp <= windowStartTime + windowDuration;
     }
 
     // Internal functions
+
     /**
      * @dev Validates the provided signature to confirm verification from provider against user request
      * for withdraw token
+     * @param _signature Signature signed by validator.
+     * @param _user The address of the user.
+     * @param _tokenIn The address of the game arcade token used for withdraw.
+     * @param _tokenOut The address of the token receive.
+     * @param _amountOut The amount of token to receive.
+     * @param _nonce The unique nonce for each withdraw request.
      */
     function _validateWithdrawData(
         bytes calldata _signature,
@@ -149,5 +238,17 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
         require(!hashUsed[dataHash], "GB05");
 
         hashUsed[dataHash] = true;
+    }
+
+    function _withdrawalLimitAmount(address _token) private view returns (uint256) {
+        return (withdrawalLimit * (_contractAssetBalance(_token) + withdrawnTotal[_token])) / 1e4;
+    }
+
+    function _contractAssetBalance(address _token) private view returns (uint256) {
+        if (_token == address(0)) {
+            return address(this).balance;
+        } else {
+            return IERC20(_token).balanceOf(address(this));
+        }
     }
 }

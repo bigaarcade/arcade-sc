@@ -14,7 +14,7 @@
 **/.coverage_contracts
 **/dist
 **/node_modules
-**/types
+**/typechain
 
 # files
 *.env
@@ -22,7 +22,6 @@
 .pnp.*
 coverage.json
 package-lock.json
-yarn.lock
 config.json
 token.json
 /.openzeppelin

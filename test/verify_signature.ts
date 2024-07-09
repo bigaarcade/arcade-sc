@@ -1,12 +1,12 @@
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import { toBeArray } from 'ethers';
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
 
 export function createWithdrawSignature(data: WithdrawData, validator: HardhatEthersSigner) {
   const { user, tokenIn, tokenOut, amountOut, nonce } = data;
   const hash = ethers.solidityPackedKeccak256(
-    ['address', 'address', 'address', 'uint256', 'uint256'],
-    [user.address, tokenIn, tokenOut, amountOut, nonce],
+    ['uint256', 'address', 'address', 'address', 'uint256', 'uint256'],
+    [network.config.chainId, user.address, tokenIn, tokenOut, amountOut, nonce],
   );
   return signMessage(hash, validator);
 }
