@@ -9,6 +9,10 @@ This project contains BIGA smart contract in Solidity and running on Hardhat fra
 
 ```shell
 npm install
+
+// or
+
+yarn
 ```
 
 ## 2. BIGA deployment
@@ -24,5 +28,10 @@ npm install
 
 ```shell
 npm run build
-npm run deployBigA
+npm run deploy
+
+// or
+
+yarn build
+yarn deploy
 ```
