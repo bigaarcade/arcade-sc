@@ -20,6 +20,7 @@ import "./utils/VerifySignature.sol";
     GB06: Invalid signature length
     GB07: Token not whitelisted
     GB08: Withdrawal limit exceedded
+    GB09: Transfer failed
 */
 contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using Address for address;
@@ -27,9 +28,8 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using VerifySignature for bytes;
     using SafeERC20 for IERC20;
 
-    uint256 public constant VERSION = 5;
+    uint256 public constant VERSION = 6;
 
-    uint256 public chainId;
     address public validator;
     mapping(bytes32 => bool) hashUsed;
     mapping(address => bool) public tokenWhitelist;
@@ -41,21 +41,44 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     mapping(address => uint256) public withdrawnTotal; // token address => amount
     uint256 public windowStartTime; // timestamp
 
-    // Constructor
+    // Constructor & Initialize
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /**
+     * @dev Set the owner of the contract at initialization.
+     * @param _owner The address of the owner of contract. Should be multisig wallet address.
+     * @param _validator The address of the backend validator.
+     * @param _withdrawalLimit Withdrawal limit amount.
+     * @param _windowDuration Window duration in seconds.
+     */
     function initialize(
+        address _owner,
         address _validator,
-        uint256 _chainId,
         uint256 _withdrawalLimit,
         uint256 _windowDuration
     ) public initializer {
-        __Ownable2Step_init();
+        __Ownable2Step_init(_owner);
         _validator.checkEmptyAddress("GB01");
         require(_withdrawalLimit <= 10_000, "GB03.2");
 
-        chainId = _chainId;
         validator = _validator;
         withdrawalLimit = _withdrawalLimit;
         windowDuration = _windowDuration;
+    }
+
+    // Allow receive ETH directly
+    receive() external payable {}
+
+    /**
+     * @dev Set the owner of the contract at initialization.
+     * @param _owner The address of the owner.
+     */
+    function __Ownable2Step_init(address _owner) internal onlyInitializing {
+        _transferOwnership(_owner);
     }
 
     // Owner functions
@@ -118,9 +141,6 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
      */
     function removeFromWhitelist(address[] calldata _tokens) external onlyOwner {
         for (uint i = 0; i < _tokens.length; i++) {
-            if (_tokens[i] != address(0)) {
-                _tokens[i].checkERC20("GB02");
-            }
             tokenWhitelist[_tokens[i]] = false;
         }
 
@@ -185,23 +205,35 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
         // Validate withdraw limit + Update total withdrawal
         // Reset window start time if exceed window
         if (checkWindow()) {
-            require(withdrawnTotal[_tokenOut] + _amountOut <= _withdrawalLimitAmount(_tokenOut), "GB08");
+            require(withdrawnTotal[_tokenOut] + _amountOut <= withdrawalLimitAmount(_tokenOut), "GB08");
             withdrawnTotal[_tokenOut] += _amountOut;
         } else {
-            require(_amountOut <= _withdrawalLimitAmount(_tokenOut), "GB08");
+            require(_amountOut <= withdrawalLimitAmount(_tokenOut), "GB08");
             withdrawnTotal[_tokenOut] = _amountOut;
             windowStartTime = block.timestamp;
         }
 
         // Withdraw token to user
         if (_tokenOut == address(0)) {
-            payable(user).transfer(_amountOut);
+            (bool result, ) = payable(user).call{ value: _amountOut }("");
+            require(result, "GB09");
         } else {
             _tokenOut.checkERC20("GB02");
             IERC20(_tokenOut).safeTransfer(user, _amountOut);
         }
 
-        emit Withdrawn(user, _tokenIn, _tokenOut, _amountOut, _nonce, chainId);
+        emit Withdrawn(user, _tokenIn, _tokenOut, _amountOut, _nonce, block.chainid);
+    }
+
+    /**
+     * @dev Get the withdraw limit amount of a specific token in the current window.
+     * @param _token Address of the token to be withdraw.
+     */
+    function withdrawalLimitAmount(address _token) public view returns (uint256) {
+        return
+            checkWindow()
+                ? (withdrawalLimit * (_contractAssetBalance(_token) + withdrawnTotal[_token])) / 1e4
+                : (withdrawalLimit * (_contractAssetBalance(_token))) / 1e4;
     }
 
     /**
@@ -231,17 +263,13 @@ contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
         uint256 _amountOut,
         uint256 _nonce
     ) private {
-        bytes memory data = abi.encodePacked(chainId, _user, _tokenIn, _tokenOut, _amountOut, _nonce);
+        bytes memory data = abi.encodePacked(block.chainid, _user, _tokenIn, _tokenOut, _amountOut, _nonce);
         data.verifySignature(_signature, validator, "GB04");
 
         bytes32 dataHash = keccak256(data);
         require(!hashUsed[dataHash], "GB05");
 
         hashUsed[dataHash] = true;
-    }
-
-    function _withdrawalLimitAmount(address _token) private view returns (uint256) {
-        return (withdrawalLimit * (_contractAssetBalance(_token) + withdrawnTotal[_token])) / 1e4;
     }
 
     function _contractAssetBalance(address _token) private view returns (uint256) {

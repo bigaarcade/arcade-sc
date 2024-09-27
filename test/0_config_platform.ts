@@ -1,15 +1,15 @@
 import { HardhatEthersSigner } from '@nomicfoundation/hardhat-ethers/signers';
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import { expect } from 'chai';
-import { ethers, network, upgrades } from 'hardhat';
+import { ethers, upgrades } from 'hardhat';
 import { BIGA, MockToken__factory } from '../typechain';
 import { ZERO_ADDRESS, bigDecimal, usdcDecimal, wbtcDecimal } from './utils';
 
-export let [owner, user, validator, newValidator]: HardhatEthersSigner[] = [];
+export let [deployer, owner, user, validator, newValidator]: HardhatEthersSigner[] = [];
 
 describe('BIGA config platform', () => {
   before(async () => {
-    [owner, user, validator, newValidator] = await ethers.getSigners();
+    [deployer, owner, user, validator, newValidator] = await ethers.getSigners();
   });
 
   describe('Deploy', () => {
@@ -52,7 +52,7 @@ describe('BIGA config platform', () => {
       const input = new PlatformConfig();
       input.validator = ZERO_ADDRESS;
 
-      await expect(setPlatformValidator(biga, input)).revertedWith('GB01');
+      await expect(setPlatformValidator(biga, input, owner)).revertedWith('GB01');
     });
 
     it('Set platform withdrawal limit fail - Non owner call', async () => {
@@ -89,11 +89,20 @@ describe('BIGA config platform', () => {
 
       const input = new PlatformConfig();
       input.validator = user.address;
+      input.windowDuration = 100;
+      input.withdrawalLimit = 100;
 
-      await setPlatformValidator(biga, input);
+      await setPlatformValidator(biga, input, owner);
+      await setPlatformWindwoDuration(biga, input, owner);
+      await setPlatformWithdrawalLimit(biga, input, owner);
+
       const validator = await biga.validator();
+      const windowDuration = await biga.windowDuration();
+      const withdrawalLimit = await biga.withdrawalLimit();
 
       expect(validator).equal(user.address);
+      expect(windowDuration).equal(100);
+      expect(withdrawalLimit).equal(100);
     });
   });
 });
@@ -136,8 +145,10 @@ export async function deploy() {
   const bigaToken = await deployTokenBIGA(biga);
   const usdc = await deployUSDC(biga);
   const wbtc = await deployWBTC(biga);
-  await biga.addToWhitelist([usdc, bigaToken]);
-  return { biga, bigaToken, usdc, wbtc };
+  const eth = ZERO_ADDRESS;
+  await deployer.sendTransaction({ to: biga, value: bigDecimal(1000) });
+  await biga.connect(owner).addToWhitelist([usdc, bigaToken, eth]);
+  return { biga, bigaToken, usdc, wbtc, eth };
 }
 
 async function setPlatformValidator(biga: BIGA, input: PlatformConfig, from?: HardhatEthersSigner) {
@@ -159,19 +170,19 @@ async function setPlatformWindwoDuration(biga: BIGA, input: PlatformConfig, from
 }
 
 export class PlatformConfig {
+  owner: string;
   validator: string;
-  chainId: number;
   withdrawalLimit: number;
   windowDuration: number;
 
   constructor() {
+    this.owner = owner.address;
     this.validator = validator.address;
-    this.chainId = network.config.chainId;
     this.withdrawalLimit = 10000;
     this.windowDuration = 0;
   }
 
   asParams() {
-    return [this.validator, this.chainId, this.withdrawalLimit, this.windowDuration];
+    return [this.owner, this.validator, this.withdrawalLimit, this.windowDuration];
   }
 }
