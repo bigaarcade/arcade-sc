@@ -1,4 +1,3 @@
-import BigNumber from 'bignumber.js';
 import fs from 'fs';
 import { ethers, upgrades } from 'hardhat';
 import path from 'path';
@@ -16,8 +15,9 @@ async function main() {
   console.log(`\nDeploying BIGA at ${chainName} (${chainId})`);
   console.log('Deployer:', deployer.address);
 
+  const owner = BigaConfigs.OWNER;
   const validator = BigaConfigs.VALIDATOR;
-  const withdrawalLimit = new BigNumber(BigaConfigs.WITHDRAWAL_LIMIT).multipliedBy(1e18).toFixed();
+  const withdrawalLimit = BigaConfigs.WITHDRAWAL_LIMIT;
   const windowDuration = BigaConfigs.WINDOW_DURATION;
 
   const Biga = new BIGA__factory(deployer);
@@ -42,7 +42,7 @@ async function main() {
       console.log('Set window duration tx', tx.hash);
     }
   } else {
-    const biga = await upgrades.deployProxy(Biga, [validator, chainId, withdrawalLimit, windowDuration]);
+    const biga = await upgrades.deployProxy(Biga, [owner, validator, withdrawalLimit, windowDuration]);
     BigaConfigs.BIGA = await biga.getAddress();
     console.log(`\nBIGA deployed to ${BigaConfigs.BIGA}`);
     fs.writeFileSync(configPath, JSON.stringify(BigaConfigs, null, 2));

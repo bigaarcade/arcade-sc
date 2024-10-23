@@ -5,9 +5,11 @@ async function main() {
   const contractPaths = [
     'artifacts/@openzeppelin/contracts/token/ERC20/ERC20.sol/ERC20.json',
     'artifacts/contracts/BIGA.sol/BIGA.json',
+    'artifacts/contracts/BIGAStaking.sol/BIGAStaking.json',
   ];
   if (process.argv[2] == 'mock') {
     contractPaths.push('artifacts/contracts/mocks/MockToken.sol/MockToken.json');
+    contractPaths.push('artifacts/contracts/mocks/MockBIGAStaking.sol/MockBIGAStaking.json');
   }
 
   execSync(`${typechainCmd} ${contractPaths.join(' ')}`);

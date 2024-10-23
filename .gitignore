@@ -24,4 +24,5 @@ coverage.json
 package-lock.json
 config.json
 token.json
+staking.json
 /.openzeppelin

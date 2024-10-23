@@ -19,7 +19,7 @@ import "./utils/VerifySignature.sol";
     GB05: Signature already used
     GB06: Invalid signature length
     GB07: Token not whitelisted
-    GB08: Withdrawal limit exceedded
+    GB08: Withdrawal limit exceeded
     GB09: Transfer failed
 */
 contract BIGA is IBIGA, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
