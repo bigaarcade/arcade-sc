@@ -87,7 +87,7 @@ contract BIGAStaking is IBIGAStaking, Ownable2StepUpgradeable, ReentrancyGuardUp
         require(term == 6 || term == 12 || term == 24, "BS03.1");
 
         stakes[msg.sender] = StakeInfo({ amount: amount, term: term, startTime: block.timestamp });
-        stakingToken.transferFrom(msg.sender, address(this), amount);
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
 
         emit Staked(msg.sender, amount, term);
     }
@@ -103,7 +103,7 @@ contract BIGAStaking is IBIGAStaking, Ownable2StepUpgradeable, ReentrancyGuardUp
         require(block.timestamp >= termDeadline, "BS05");
 
         delete stakes[msg.sender];
-        stakingToken.transfer(msg.sender, stakeInfo.amount);
+        stakingToken.safeTransfer(msg.sender, stakeInfo.amount);
 
         emit WithdrawnStake(msg.sender, stakeInfo.amount);
     }
